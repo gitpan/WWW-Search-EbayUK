@@ -2,11 +2,10 @@ use 5.008;
 use ExtUtils::MakeMaker;
 WriteMakefile(
               'NAME'	=> 'WWW::Search::EbayUK',
-              'VERSION' => '2.00',
+              'VERSION' => '2.01',
               'PREREQ_PM' => {
-                              # The module's version, not the
-                              # distribution's version:
-                              # 'WWW::Search' => 2.27,
-                              'WWW::Search::Test' => 2.12,
+                              'WWW::Search' => 2.27,
+			      'WWW::Search::Test' => 2.12,
+                              'HTML::TreeBuilder' => 2.27,
                              },
              );

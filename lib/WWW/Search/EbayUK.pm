@@ -1,17 +1,15 @@
 # EbayUK.pm
 # Adapted by Andy Pritchard. Original Ebay backend by Martin Thurn 
-# $Id: EbayUK.pm,v 2.00 2003-02-21 17:44:09-05 kingpin Exp kingpin $
+# $Id: EbayUK.pm,v 2.01 2003-03-14 16:30:00 $
 
 package WWW::Search::EbayUK;
 
 @ISA = qw( WWW::Search );
 
-use Carp ();
-use Data::Dumper;  # for debugging only
 use WWW::Search qw( generic_option strip_tags );
 use WWW::Search::Result;
 
-$VERSION = '2.00';
+$VERSION = '2.01';
 $MAINTAINER = 'Andy Pritchard <pilchkinstein@hotmail.com>';
 
 # private
@@ -409,6 +407,11 @@ WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTIES OF
 MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
 
 =head1 VERSION HISTORY
+
+=head2 2.01, 2003-03-14
+
+Added extra prerequisites to the Makefile.PL 
+to ensure all dependencies are covered.
 
 =head2 2.00, 2003-02-26
 
