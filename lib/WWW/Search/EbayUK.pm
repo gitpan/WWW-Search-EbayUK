@@ -1,115 +1,6 @@
 # EbayUK.pm
-# Original by Martin Thurn Adapted by Andy Pritchard
-# $Id: EbayUK.pm,v 1.00 2003-02-21 17:44:09-05 kingpin Exp kingpin $
-
-=head1 NAME
-
-WWW::Search::EbayUK - backend for searching www.ebay.co.uk
-
-=head1 SYNOPSIS
-
-  use WWW::Search;
-  my $oSearch = new WWW::Search('EbayUK');
-  my $sQuery = WWW::Search::escape_query("Bovine Spongiform Encephalitis");
-  $oSearch->native_query($sQuery);
-  while (my $oResult = $oSearch->next_result())
-    { print $oResult->url, "\n"; }
-
-=head1 DESCRIPTION
-
-This class is a Ebay specialization of WWW::Search.
-It handles making and interpreting Ebay searches
-F<http://www.ebay.co.uk>.
-
-This class exports no public interface; all interaction should
-be done through L<WWW::Search> objects.
-
-=head1 NOTES
-
-The search is done against CURRENT running auctions only.
-
-The query is applied to TITLES only.
-
-The results are ordered youngest auctions first (reverse order of
-auction listing date).
-
-In the resulting WWW::Search::Result objects, the description field
-consists of a human-readable combination (joined with semicolon-space)
-of the Item Number; number of bids; and high bid amount (or starting
-bid amount).
-
-=head1 OPTIONS
-
-=over
-
-=item Search descriptions
-
-To search titles and descriptions, add 'srchdesc' => 'y' to the query options:
-
-  $oSearch->native_query($sQuery, { srchdesc => 'y' } );
-
-=back
-
-=head1 SEE ALSO
-
-To make new back-ends, see L<WWW::Search>.
-
-=head1 CAVEATS
-
-=head1 BUGS
-
-Please tell the author if you find any!
-
-=head1 AUTHOR
-
-C<WWW::Search::EbayUK> was Adapted by Andy Pritchard from Martin Thurn's Ebay backend
-(pilchkinstein@hotmail.com).
-
-C<WWW::Search::Ebay> was written by Martin Thurn
-(mthurn@megapipe.net).
-
-C<WWW::Search::Ebay> is maintained by Martin Thurn
-(mthurn@megapipe.net).
-
-=head1 LEGALESE
-
-THIS SOFTWARE IS PROVIDED "AS IS" AND WITHOUT ANY EXPRESS OR IMPLIED
-WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
-
-=head1 VERSION HISTORY
-
-=head2 1.00, 2003-02-14
-
-Adapted Ebay module for ebay.co.uk site
-
-=head2 2.13, 2003-02-06
-
-Fixed parsing for slightly-changed ebay.com pages
-
-=head2 2.11, 2002-10-21
-
-Fixed parsing for Buy-It-Now prices, and foreign currencies
-
-=head2 2.08, 2002-07-24
-
-Fixed parsing for new images in the results table
-
-=head2 2.07, 2001-12-20
-
-Restructured using parse_tree()
-
-=head2 2.06, 2001-12-20
-
-Handle new ebay.com output format
-
-=head2 2.01
-
-First publicly-released version.
-
-=cut
-
-#####################################################################
+# Adapted by Andy Pritchard. Original Ebay backend by Martin Thurn 
+# $Id: EbayUK.pm,v 2.00 2003-02-21 17:44:09-05 kingpin Exp kingpin $
 
 package WWW::Search::EbayUK;
 
@@ -120,14 +11,14 @@ use Data::Dumper;  # for debugging only
 use WWW::Search qw( generic_option strip_tags );
 use WWW::Search::Result;
 
-$VERSION = '1.00';
+$VERSION = '2.00';
 $MAINTAINER = 'Andy Pritchard <pilchkinstein@hotmail.com>';
 
 # private
 sub native_setup_search
   {
   my ($self, $native_query, $rhOptsArg) = @_;
-
+  
   # Set some private variables:
   $self->{_debug} ||= $rhOptsArg->{'search_debug'};
   $self->{_debug} = 2 if ($rhOptsArg->{'search_parse_debug'});
@@ -157,7 +48,7 @@ sub native_setup_search
     # Copy in new options.
     foreach my $key (keys %$rhOptsArg)
       {
-      # print STDERR " +   inspecting option $key...";
+      #print STDERR " +   inspecting option $key...";
       if (WWW::Search::generic_option($key))
         {
         # print STDERR "promote & delete\n";
@@ -166,14 +57,20 @@ sub native_setup_search
         }
       else
         {
-        # print STDERR "copy\n";
+        #print STDERR "copy\n";
         $self->{_options}->{$key} = $rhOptsArg->{$key} if defined($rhOptsArg->{$key});
         }
       } # foreach
     } # if
 
-  # Finally, figure out the url.
-  $self->{_next_url} = $self->{_options}->{'search_url'} .'?'. $self->hash_to_cgi_string($self->{_options});
+  # Finally, figure out the url. With extra option to just go for the url supplied.
+    if (defined($self->{_options}->{'follow_link'}))
+    {
+      print STDERR " + follow_link -->",$self->{_options}->{'follow_link'}, "<--\n" if 1 < $self->{_debug};
+      $self->{_next_url} = $self->{_options}->{'follow_link'};
+    }else{
+      $self->{_next_url} = $self->{_options}->{'search_url'} .'?'. $self->hash_to_cgi_string($self->{_options});
+    }
   } # native_setup_search
 
 
@@ -188,6 +85,9 @@ sub preprocess_results_page
   return $sPage;
   } # preprocess_results_page
 
+package WWW::SearchResult;  # Adding new details method
+sub details { return shift->_elem('details', @_); }
+package WWW::Search::EbayUK;
 
 # private
 sub parse_tree
@@ -207,16 +107,80 @@ sub parse_tree
   }
   # The hit count is in a FONT tag:
   my @aoFONT = $tree->look_down('_tag', 'font');
+  if (defined($self->{_options}->{'follow_link'}))
+  {
+    my($oDetails) = {}; # We can put what we want in here now 'thumbnail' 'Start' 'End' so far
+    my($s_nextdate,$sTitle2);   
+    my @aoTD2 = $tree->look_down('_tag', 'td');
+    my @aoIMG2 = $tree->look_down('_tag', 'img');
+    
+  FONT_2:
+    foreach my $oFONT2 (@aoFONT)
+    # If we run through the retrieve html step, the stuff we want is in here.
+    {
+      print STDERR " +   try FONT_2 as_text ===", $oFONT2->as_text, "===\n" if 1 < $self->{_debug};
+      $sTitle2 = $oFONT2->as_text unless ($sTitle2);# The first font entry is the title
+      foreach my $pDATE ('Start','End') # Alter the spelling here if ebay change it. Shouldnt be needed.
+      {
+        $s_nextdate = $pDATE if ($oFONT2->as_text =~ /${pDATE}/);
+        if (($oFONT2->as_text =~ m!(\d+\-\w+\-\d+\s*\d+:\d+:\d+\s*GMT)!) and ($s_nextdate))
+        { 
+          next FONT_2 if (defined($oDetails->{$s_nextdate}));  
+          $oDetails->{$s_nextdate} = $1;
+          if (1 < $self->{_debug})
+          {
+	    print STDERR " + Trying to match \'$s_nextdate\'\n";
+            print STDERR " == Got a Date ==>${1}\n";
+            print STDERR " == Now \$oDetails->{\'$s_nextdate\'} ==>", $oDetails->{$s_nextdate}, "\n";
+          } 
+        }   
+      }
+      ## Deleting HTML element so that future searches go faster!
+      $oFONT2->detach;
+      $oFONT2->delete;
+      ## Need to fill what we can of these when we get this far 
+    } # foreach FONT_2 
+  
+  IMG_2:
+    foreach my $oIMG2 (@aoIMG2)
+    {
+      my $sIMG = $oIMG2->as_HTML;
+      chomp($sIMG);
+      print STDERR " +   try IMG_2 as_HTML ===$sIMG===\n" if 1 < $self->{_debug};
+      if (($sIMG =~ /border=1/) and ($sIMG =~ /width=\d\d\b/) and ($sIMG =~ /height=\d\d\b/))
+      { 
+        $sIMG =~ s/.*src=\"(.*)\".*/$1/;
+        print STDERR " == Got a Thumbnail =>$sIMG<=\n" if 1 < $self->{_debug}; 
+        $oDetails->{'thumbnail'} = $sIMG;
+      }
+    } # foreach IMG_2
+    
+    my $hit = new WWW::Search::Result;
+    $hit->title($sTitle2);	# There's really no need to send this since you should have it from page 1.
+    #$hit->description($sDesc);
+    $hit->details($oDetails);	# This contains extra keys 'thumbnail','Start','End' 
+    $hit->raw($tree->as_HTML);	# This is new to this Backend
+    push(@{$self->{cache}}, $hit);
+    $hits_found++;
+    
+    # Finished with this page now, no next to follow.  
+    $tree->delete;
+    return $hits_found;
+ } # if follow_link defined
+     
  FONT:
   foreach my $oFONT (@aoFONT)
     {
     print STDERR " +   try FONT ===", $oFONT->as_text, "===\n" if 1 < $self->{_debug};
+    # If we run through the retrieve html step, the stuff we want is in here.
+    
     if ($oFONT->as_text =~ m!(\d+) items found !)
-      {
-      $self->approximate_result_count($1);
-      last FONT;
-      } # if
+        {
+        $self->approximate_result_count($1);
+        last FONT;
+        } # if
     } # foreach
+   
   # The list of matching items is in a table.  The first column of the
   # table is nothing but icons; the second column is the good stuff.
   my @aoTD = $tree->look_down('_tag', 'td',
@@ -337,3 +301,148 @@ sub parse_tree
 
 __END__
 
+#####################################################################
+
+=head1 NAME
+
+WWW::Search::EbayUK - backend for searching www.ebay.co.uk
+
+=head1 SYNOPSIS
+
+    use WWW::Search;
+    my $oSearch = new WWW::Search('EbayUK');
+    my $sQuery = WWW::Search::escape_query("Bovine Spongiform Encephalitis");
+    $oSearch->native_query($sQuery);
+    while (my $oResult = $oSearch->next_result())
+      { 
+        print $oResult->url, "\n"; 
+        print $oResult->title, "\n";
+        print $oResult->description, "\n";
+      }
+
+=head1 DESCRIPTION
+
+This class is a Ebay specialization of WWW::Search.
+It handles making and interpreting Ebay searches
+F<http://www.ebay.co.uk>.
+
+This class exports no public interface; all interaction should
+be done through L<WWW::Search> objects.
+
+=head1 NOTES
+
+The search is done against CURRENT running auctions only.
+
+The query is applied to TITLES only. See below for retrieving html from links.
+
+The results are ordered youngest auctions first (reverse order of
+auction listing date).
+
+In the resulting WWW::Search::Result objects, the description field
+consists of a human-readable combination (joined with semicolon-space)
+of the Item Number; number of bids; and high bid amount (or starting
+bid amount).
+
+Extra information is available by C<following> the links returned by:
+$oResult->url 
+  In such an instance extra information is returned 
+that is not normally accessible from the result page.
+To cater for this, an extra I<details> method is introduced:
+
+  $oResult->details
+  
+Which stores the extra information in a hash.
+
+=head1 OPTIONS
+
+=over
+
+=item Search descriptions
+
+To search titles and descriptions, add 'srchdesc' => 'y' to the query options:
+
+  $oSearch->native_query($sQuery, { srchdesc => 'y' } );
+  
+=item Following Links
+
+To retrieve information from a specific ebay link, 
+add 'follow_link' => '<http:// full URL>' to the query options:
+
+  $sURL = '<http:// full URL>';
+  $oSearch->native_query($sURL, { follow_link => "$sURL" } );
+  
+No escaping is required in this case.
+  
+=item Information From Followed Links
+
+Extra information is returned by this process. 
+(Auction Start and End dates are a case in point.)
+Query the $oResult->details hash to retrieve this.      
+E.g. the start date of the auction is retrieved like so:
+
+  print $oResult->details->{'Start'}, "\n";
+
+=back
+
+=head1 SEE ALSO
+
+To make new back-ends, see L<WWW::Search>.
+
+=head1 BUGS
+
+Doubt it. Please tell me if you find any!
+
+=head1 AUTHOR
+
+C<WWW::Search::EbayUK> was Adapted by Andy Pritchard from Martin Thurn's Ebay module
+(pilchkinstein@hotmail.com).
+
+Original C<WWW::Search::Ebay> was written by Martin Thurn
+(mthurn@megapipe.net).
+
+C<WWW::Search::EbayUK> is maintained by Andy Pritchard
+
+=head1 LEGALESE
+
+THIS SOFTWARE IS PROVIDED "AS IS" AND WITHOUT ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+
+=head1 VERSION HISTORY
+
+=head2 2.00, 2003-02-26
+
+Added C<follow_link> functionality and new I<details> method.
+This also supports the I<raw> and I<title> calls.
+
+=head2 1.00, 2003-02-14
+
+Adapted Ebay module for ebay.co.uk site
+
+=head2 2.13, 2003-02-06
+
+Fixed parsing for slightly-changed ebay.com pages
+
+=head2 2.11, 2002-10-21
+
+Fixed parsing for Buy-It-Now prices, and foreign currencies
+
+=head2 2.08, 2002-07-24
+
+Fixed parsing for new images in the results table
+
+=head2 2.07, 2001-12-20
+
+Restructured using parse_tree()
+
+=head2 2.06, 2001-12-20
+
+Handle new ebay.com output format
+
+=head2 2.01
+
+First publicly-released version.
+
+=cut
+
+#####################################################################

@@ -1,4 +1,10 @@
-2003-02-21  Kingpin  <pilchkinstein@hotmail.com>
+2003-02-27  <pilchkinstein@hotmail.com>
+
+2.00  Thu Feb 27 16:22:54 2003
+
+	* VERSION 2.00 Added follow_link functionality, new details method and other stuff
+
+2003-02-27  <pilchkinstein@hotmail.com>
 
 	* VERSION 1.00 RELEASED
 
